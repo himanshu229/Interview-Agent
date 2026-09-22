@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { platform } from "@tauri-apps/plugin-os";
 import { useSettings } from "@/context/SettingsContext";
 import { setContentProtection } from "@/lib/api";
@@ -7,6 +7,19 @@ export default function SettingsTab() {
   const { settings, update } = useSettings();
   const [platformName] = useState(() => platform());
   const modifier = platformName === "macos" ? "Command" : "Control";
+
+  // Local draft so partial keystrokes don't register invalid/empty shortcuts.
+  const [shortcutDraft, setShortcutDraft] = useState(settings.globalShortcut);
+  useEffect(() => setShortcutDraft(settings.globalShortcut), [settings.globalShortcut]);
+
+  const commitShortcut = () => {
+    const value = shortcutDraft.trim();
+    if (!value) {
+      setShortcutDraft(settings.globalShortcut);
+      return;
+    }
+    if (value !== settings.globalShortcut) void update({ globalShortcut: value });
+  };
 
   return (
     <div className="settings-tab">
@@ -47,8 +60,14 @@ export default function SettingsTab() {
         <div className="settings-field settings-field--shortcut">
           <label>Hide / show application ({modifier} + H)</label>
           <input
-            value={settings.globalShortcut}
-            onChange={(e) => update({ globalShortcut: e.target.value })}
+            value={shortcutDraft}
+            onChange={(e) => setShortcutDraft(e.target.value)}
+            onBlur={commitShortcut}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+            }}
             placeholder={`${modifier}+H`}
           />
         </div>

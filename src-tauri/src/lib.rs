@@ -57,8 +57,31 @@ pub fn run() {
             // Apply persisted window preferences.
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_always_on_top(always_on_top);
+                // Stay pinned above other apps' windows even across Spaces / full-screen apps.
+                let _ = window.set_visible_on_all_workspaces(true);
+                if always_on_top {
+                    commands::window::pin_above_everything(&window);
+                }
                 // Hide the window from screen capture / sharing when enabled.
                 let _ = window.set_content_protected(content_protection);
+
+                // Open at the top-center of the primary monitor instead of full-center.
+                if let (Ok(Some(monitor)), Ok(size)) =
+                    (window.current_monitor(), window.outer_size())
+                {
+                    let margin: i32 = 16;
+                    let mon_pos = monitor.position();
+                    let mon_size = monitor.size();
+                    let x = mon_pos.x
+                        + ((mon_size.width as i32 - size.width as i32) / 2).max(0);
+                    let y = mon_pos.y + margin;
+                    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                }
+
+                // Window is created hidden (see tauri.conf.json) so it never flashes
+                // at the OS default position before the repositioning above applies.
+                let _ = window.show();
+                let _ = window.set_focus();
             }
 
             Ok(())
@@ -69,6 +92,19 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                }
+            }
+            // Re-assert the topmost z-order whenever focus moves to another app,
+            // so a newly-opened app can't bury this window behind it.
+            if let WindowEvent::Focused(false) = event {
+                if window.label() == "main" {
+                    let app = window.app_handle();
+                    let always_on_top = app.state::<AppState>().settings.read().always_on_top;
+                    if always_on_top {
+                        if let Some(webview) = app.get_webview_window("main") {
+                            commands::window::pin_above_everything(&webview);
+                        }
+                    }
                 }
             }
         })
@@ -97,6 +133,7 @@ pub fn run() {
             commands::window::set_always_on_top,
             commands::window::set_content_protection,
             commands::window::toggle_floating_window,
+            commands::window::resize_to_content,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AI Desktop Assistant");

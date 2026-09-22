@@ -96,8 +96,9 @@ export default function SessionSetup({ onCreate }: SessionSetupProps) {
   return (
     <div className="setup">
       <div className="setup__card glass">
-        <header className="setup__head">
+        <header className="setup__head" data-tauri-drag-region>
           <h1 data-tauri-drag-region>New Session</h1>
+          <span className="setup__head-spacer" data-tauri-drag-region />
           <div className="setup__head-actions">
             <button
               className="toolbar__icon"

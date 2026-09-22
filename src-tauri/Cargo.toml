@@ -63,6 +63,21 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-log = "2"
 
+# Raw NSWindow access to pin the window above all other apps' windows.
+[target."cfg(target_os = \"macos\")".dependencies]
+objc2 = "0.6"
+
+# Raw HWND access to force topmost z-order via SetWindowPos.
+[target."cfg(windows)".dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# GTK "keep above" hint (X11 only; Wayland ignores window-initiated stacking).
+[target."cfg(any(target_os = \"linux\", target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"openbsd\", target_os = \"netbsd\"))".dependencies]
+gtk = { version = "0.18", features = ["v3_24"] }
+
 [features]
 # This feature is used for production builds or when a dev server is not
 # specified, DO NOT REMOVE!!

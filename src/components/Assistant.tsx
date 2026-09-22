@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import Toolbar from "@/components/Toolbar";
 import TranscriptPanel from "@/components/TranscriptPanel";
@@ -12,8 +11,6 @@ import { useSettings } from "@/context/SettingsContext";
 import { captureFullScreen, runOcr } from "@/lib/api";
 import { buildSystemPrompt } from "@/lib/session";
 import type { SessionConfig } from "@/types";
-
-const appWindow = getCurrentWindow();
 
 function useElapsed(): string {
   const [seconds, setSeconds] = useState(0);
@@ -67,6 +64,13 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     );
   }, [settings.opacity]);
 
+  // Start listening on both mic and system audio as soon as a session begins.
+  useEffect(() => {
+    if (!transcript.micActive) void transcript.toggleMic();
+    if (!transcript.systemActive) void transcript.toggleSystem();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onAnswer = useCallback(() => {
     const context = transcript.fullText || assistant.question;
     if (context) void assistant.ask(context, { format: true });
@@ -88,10 +92,6 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     transcript.clear();
     assistant.clear();
   }, [transcript, assistant]);
-
-  const onExpand = useCallback(() => {
-    void appWindow.toggleMaximize();
-  }, []);
 
   const onChat = useCallback(() => setComposeOpen((v) => !v), []);
 
@@ -126,14 +126,11 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
       } else if (e.shiftKey && (key === "backspace" || key === "delete")) {
         e.preventDefault();
         onNew();
-      } else if (e.shiftKey && key === "f") {
-        e.preventDefault();
-        onExpand();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onAnswer, onScreenshot, onChat, onNew, onExpand, transcript]);
+  }, [onAnswer, onScreenshot, onChat, onNew, transcript]);
 
   useEffect(() => {
     const unlisten = listen<string>("navigate-tab", (event) => {
@@ -154,7 +151,6 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
         onToggleSystem={transcript.toggleSystem}
         onChat={onChat}
         onNew={onNew}
-        onExpand={onExpand}
         onEnd={endSession}
         elapsed={elapsed}
         menu={

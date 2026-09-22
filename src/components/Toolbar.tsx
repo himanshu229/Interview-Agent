@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { currentMonitor, getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { SNAP_POSITIONS, snapWindowTo } from "@/lib/windowSnap";
 
 export interface ToolbarProps {
   micActive: boolean;
@@ -8,7 +8,6 @@ export interface ToolbarProps {
   onToggleSystem: () => void;
   onChat: () => void;
   onNew: () => void;
-  onExpand: () => void;
   onEnd: () => void;
   elapsed: string;
   menu: ReactNode;
@@ -18,51 +17,6 @@ function Kbd({ children }: { children: ReactNode }) {
   return <span className="kbd">{children}</span>;
 }
 
-type SnapPosition =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
-
-const SNAP_POSITIONS: SnapPosition[] = [
-  "top-left",
-  "top-center",
-  "top-right",
-  "bottom-left",
-  "bottom-center",
-  "bottom-right",
-];
-
-/** Moves the window to one of six screen anchor points (corners + edge centers). */
-async function snapWindowTo(pos: SnapPosition) {
-  const win = getCurrentWindow();
-  const monitor = await currentMonitor();
-  if (!monitor) return;
-
-  const size = await win.outerSize();
-  const margin = 16;
-  const { position: monPos, size: monSize } = monitor;
-
-  const minX = monPos.x + margin;
-  const maxX = monPos.x + monSize.width - size.width - margin;
-  const centerX = monPos.x + Math.round((monSize.width - size.width) / 2);
-  const minY = monPos.y + margin;
-  const maxY = monPos.y + monSize.height - size.height - margin;
-
-  const coords: Record<SnapPosition, [number, number]> = {
-    "top-left": [minX, minY],
-    "top-center": [centerX, minY],
-    "top-right": [maxX, minY],
-    "bottom-left": [minX, maxY],
-    "bottom-center": [centerX, maxY],
-    "bottom-right": [maxX, maxY],
-  };
-  const [x, y] = coords[pos];
-  await win.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
-}
-
 export default function Toolbar({
   micActive,
   systemActive,
@@ -70,7 +24,6 @@ export default function Toolbar({
   onToggleSystem,
   onChat,
   onNew,
-  onExpand,
   onEnd,
   elapsed,
   menu,
@@ -116,10 +69,6 @@ export default function Toolbar({
 
       <button className="toolbar__timer" onClick={onEnd} title="Click to end session">
         {elapsed}
-      </button>
-
-      <button className="toolbar__icon" onClick={onExpand} title="Resize window (⌘⇧F)">
-        ⤢
       </button>
 
       <div className="toolbar__menu-wrap">

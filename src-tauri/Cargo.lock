@@ -47,10 +47,12 @@ dependencies = [
  "chrono",
  "cpal",
  "dirs 5.0.1",
+ "gtk",
  "hound",
  "image",
  "keyring",
  "log",
+ "objc2",
  "once_cell",
  "parking_lot",
  "pdf-extract",
@@ -72,6 +74,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uuid",
+ "windows 0.61.3",
  "xcap",
 ]
 

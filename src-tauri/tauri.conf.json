@@ -15,17 +15,18 @@
       {
         "label": "main",
         "title": "AI Desktop Assistant",
-        "width": 980,
-        "height": 640,
-        "minWidth": 620,
-        "minHeight": 360,
-        "resizable": true,
+        "minWidth": 540,
+        "maxWidth": 540,
+        "minHeight": 200,
+        "maxHeight": 600,
+        "resizable": false,
+        "maximizable": false,
         "fullscreen": false,
         "decorations": false,
         "transparent": true,
         "shadow": false,
-        "center": true,
-        "visible": true
+        "center": false,
+        "visible": false
       }
     ],
     "security": {

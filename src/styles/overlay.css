@@ -1,6 +1,5 @@
 /* ============ Layout ============ */
 .overlay {
-  height: 100vh;
   display: flex;
   flex-direction: column;
   border-radius: 18px;
@@ -367,7 +366,7 @@
 
 .menu {
   padding: 8px;
-  max-height: 70vh;
+  /* max-height: 70vh; */
   overflow-y: auto;
 }
 .menu__section {
@@ -459,7 +458,7 @@
 }
 .modal {
   width: min(680px, 100%);
-  max-height: 82vh;
+  /* max-height: 82vh; */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -641,15 +640,13 @@
 
 /* ============ Session setup (first page) ============ */
 .setup {
-  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
 }
 .setup__card {
   width: min(560px, 100%);
-  max-height: 100%;
+  /* max-height: 100%; */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -657,12 +654,15 @@
 .setup__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 16px 20px 8px;
 }
 .setup__head h1 {
   margin: 0;
   font-size: 18px;
+}
+.setup__head-spacer {
+  flex: 1;
+  align-self: stretch;
 }
 .setup__head-actions {
   display: flex;

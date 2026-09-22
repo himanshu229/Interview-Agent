@@ -11,6 +11,11 @@ pub fn plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 pub fn register(app: &AppHandle, shortcut: &str) {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+    let shortcut = shortcut.trim();
+    if shortcut.is_empty() {
+        return;
+    }
+
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
     if let Err(e) = gs.on_shortcut(shortcut, |app, _, event| {
