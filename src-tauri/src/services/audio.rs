@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use crate::error::{AppError, AppResult};
 
-const TARGET_SAMPLE_RATE: u32 = 16_000;
-/// Length of each audio chunk sent to Whisper, in seconds.
-const CHUNK_SECONDS: usize = 4;
+const REALTIME_SAMPLE_RATE: u32 = 24_000;
+/// Short packet size for one persistent Realtime WebSocket session.
+const REALTIME_CHUNK_MILLIS: usize = 320;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureKind {
@@ -37,6 +37,23 @@ pub struct AudioSession {
 }
 
 impl AudioSession {
+    /// Drains one short raw PCM16 packet suitable for the OpenAI Realtime API.
+    /// Returning `None` just means the capture callback has not collected a
+    /// complete packet yet; the Realtime loop will retry on its next tick.
+    pub fn take_realtime_pcm16(&self) -> Option<Vec<u8>> {
+        let device_rate = self.sample_rate.load(Ordering::SeqCst).max(1);
+        let needed = device_rate as usize * REALTIME_CHUNK_MILLIS / 1_000;
+        let samples = {
+            let mut buf = self.buffer.lock();
+            if buf.len() < needed {
+                return None;
+            }
+            buf.drain(..needed).collect::<Vec<f32>>()
+        };
+        let resampled = resample_to_rate(&samples, device_rate, REALTIME_SAMPLE_RATE);
+        Some(encode_pcm16(&resampled))
+    }
+
     /// Signals the capture thread to stop. The stream is dropped when the
     /// thread observes the flag.
     pub fn stop(&self) {
@@ -53,7 +70,7 @@ impl AudioSession {
 pub fn start_capture(kind: CaptureKind) -> AppResult<AudioSession> {
     let running = Arc::new(AtomicBool::new(true));
     let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
-    let sample_rate = Arc::new(AtomicU32::new(TARGET_SAMPLE_RATE));
+    let sample_rate = Arc::new(AtomicU32::new(REALTIME_SAMPLE_RATE));
 
     let thread_running = running.clone();
     let thread_buffer = buffer.clone();
@@ -97,42 +114,6 @@ pub fn start_capture(kind: CaptureKind) -> AppResult<AudioSession> {
         buffer,
         sample_rate,
     })
-}
-
-impl AudioSession {
-    /// Drains up to one chunk of buffered audio, returning mono 16 kHz WAV bytes
-    /// ready for the Whisper API. Returns `None` if not enough audio is buffered.
-    pub fn take_chunk_wav(&self) -> Option<Vec<u8>> {
-        let device_rate = self.sample_rate.load(Ordering::SeqCst).max(1);
-        let needed = device_rate as usize * CHUNK_SECONDS;
-
-        let samples = {
-            let mut buf = self.buffer.lock();
-            if buf.len() < needed {
-                return None;
-            }
-            let drained: Vec<f32> = buf.drain(..needed).collect();
-            drained
-        };
-
-        let resampled = resample_to_target(&samples, device_rate);
-        encode_wav(&resampled).ok()
-    }
-
-    /// Flushes any remaining buffered audio (used when stopping).
-    pub fn take_remaining_wav(&self) -> Option<Vec<u8>> {
-        let device_rate = self.sample_rate.load(Ordering::SeqCst).max(1);
-        let samples = {
-            let mut buf = self.buffer.lock();
-            if buf.len() < device_rate as usize / 2 {
-                buf.clear();
-                return None;
-            }
-            std::mem::take(&mut *buf)
-        };
-        let resampled = resample_to_target(&samples, device_rate);
-        encode_wav(&resampled).ok()
-    }
 }
 
 fn build_stream(
@@ -180,10 +161,7 @@ fn build_stream(
                 &stream_config,
                 move |data: &[i16], _| {
                     for frame in data.chunks(channels) {
-                        let sum: f32 = frame
-                            .iter()
-                            .map(|s| *s as f32 / i16::MAX as f32)
-                            .sum();
+                        let sum: f32 = frame.iter().map(|s| *s as f32 / i16::MAX as f32).sum();
                         push(sum / channels as f32, &buffer);
                     }
                 },
@@ -255,12 +233,11 @@ fn select_device(host: &cpal::Host, kind: CaptureKind) -> AppResult<Device> {
     }
 }
 
-/// Naive linear resampling to the Whisper target rate.
-fn resample_to_target(samples: &[f32], from_rate: u32) -> Vec<f32> {
-    if from_rate == TARGET_SAMPLE_RATE || samples.is_empty() {
+fn resample_to_rate(samples: &[f32], from_rate: u32, target_rate: u32) -> Vec<f32> {
+    if from_rate == target_rate || samples.is_empty() {
         return samples.to_vec();
     }
-    let ratio = TARGET_SAMPLE_RATE as f32 / from_rate as f32;
+    let ratio = target_rate as f32 / from_rate as f32;
     let out_len = (samples.len() as f32 * ratio) as usize;
     let mut out = Vec::with_capacity(out_len);
     for i in 0..out_len {
@@ -274,27 +251,11 @@ fn resample_to_target(samples: &[f32], from_rate: u32) -> Vec<f32> {
     out
 }
 
-fn encode_wav(samples: &[f32]) -> AppResult<Vec<u8>> {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: TARGET_SAMPLE_RATE,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-
-    let mut cursor = std::io::Cursor::new(Vec::new());
-    {
-        let mut writer = hound::WavWriter::new(&mut cursor, spec)
-            .map_err(|e| AppError::Audio(e.to_string()))?;
-        for &sample in samples {
-            let clamped = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-            writer
-                .write_sample(clamped)
-                .map_err(|e| AppError::Audio(e.to_string()))?;
-        }
-        writer
-            .finalize()
-            .map_err(|e| AppError::Audio(e.to_string()))?;
+fn encode_pcm16(samples: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(samples.len() * 2);
+    for &sample in samples {
+        bytes
+            .extend_from_slice(&((sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).to_le_bytes());
     }
-    Ok(cursor.into_inner())
+    bytes
 }

@@ -14,6 +14,7 @@ export interface TranscriptController {
   systemActive: boolean;
   error: string | null;
   fullText: string;
+  latestText: string;
   toggleMic: () => Promise<void>;
   toggleSystem: () => Promise<void>;
   clear: () => void;
@@ -80,6 +81,7 @@ export function useTranscript(): TranscriptController {
     () => segments.map((s) => s.text).join(" ").trim(),
     [segments],
   );
+  const latestText = segments.length > 0 ? segments[segments.length - 1].text : "";
 
   return {
     segments,
@@ -87,6 +89,7 @@ export function useTranscript(): TranscriptController {
     systemActive,
     error,
     fullText,
+    latestText,
     toggleMic,
     toggleSystem,
     clear,

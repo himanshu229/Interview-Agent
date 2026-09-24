@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type { TranscriptController } from "@/hooks/useTranscript";
 
 interface TranscriptPanelProps {
@@ -6,11 +5,7 @@ interface TranscriptPanelProps {
 }
 
 export default function TranscriptPanel({ transcript }: TranscriptPanelProps) {
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcript.segments]);
+  const latestSegment = transcript.segments[transcript.segments.length - 1];
 
   return (
     <section className="glass panel">
@@ -18,24 +13,18 @@ export default function TranscriptPanel({ transcript }: TranscriptPanelProps) {
         <button className="chip chip--ghost panel__clear panel__clear-action" onClick={transcript.clear} title="Clear transcript">
           Clear
         </button>
-        {transcript.segments.length === 0 ? (
+        {!latestSegment ? (
           <p className="panel__hint">
             {transcript.micActive
               ? "Listening to your microphone…"
               : "Microphone is paused. Use the microphone icon to start listening."}
           </p>
         ) : (
-          transcript.segments.map((s) => (
-            <p
-              key={s.id}
-              className={"line" + (s.isFinal ? "" : " line--interim")}
-            >
-              <span className="line__who">You:</span> {s.text}
-            </p>
-          ))
+          <p className={"listener-ticker" + (latestSegment.isFinal ? "" : " is-interim")}>
+            {latestSegment.text}
+          </p>
         )}
-        {transcript.error && <p className="line line--error">⚠ {transcript.error}</p>}
-        <div ref={endRef} />
+        {transcript.error && <p className="listener-ticker listener-ticker--error">⚠ {transcript.error}</p>}
       </div>
     </section>
   );

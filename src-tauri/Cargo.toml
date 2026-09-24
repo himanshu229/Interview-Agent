@@ -25,7 +25,9 @@ tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
 
 # Persistence
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
@@ -38,9 +40,8 @@ xcap = "0.9"
 image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
 
-# Audio capture + WAV encoding
+# Audio capture + Realtime PCM streaming
 cpal = "0.15"
-hound = "3.5"
 
 # OCR (wraps the tesseract CLI)
 rusty-tesseract = "1.1"

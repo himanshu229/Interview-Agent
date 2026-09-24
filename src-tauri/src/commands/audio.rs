@@ -1,12 +1,18 @@
 use std::sync::Arc;
 use std::time::Duration;
+use base64::Engine;
+use futures_util::{SinkExt, StreamExt};
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
 use crate::error::AppResult;
 use crate::models::TranscriptSegment;
 use crate::services::audio::{start_capture, AudioSession, CaptureKind};
-use crate::services::openai::OpenAiClient;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -57,8 +63,7 @@ async fn start(
         }
     }
 
-    let client = state.openai_client()?;
-    let model = state.settings.read().whisper_model.clone();
+    let realtime_connection = state.openai_client()?.realtime_connection()?;
 
     let session = Arc::new(start_capture(kind)?);
 
@@ -67,59 +72,137 @@ async fn start(
         CaptureKind::SystemAudio => *state.system_session.lock() = Some(session.clone()),
     }
 
-    spawn_transcription_loop(app, session, client, model, kind);
+    spawn_realtime_transcription_loop(app, session, realtime_connection, kind);
     Ok(())
 }
 
-/// Background loop: repeatedly drains audio chunks and transcribes them,
-/// emitting `transcript-segment` events to the frontend.
-fn spawn_transcription_loop(
+/// Streams microphone/system PCM to one OpenAI Realtime WebSocket instead of
+/// creating a new HTTP transcription request for every audio chunk.
+fn spawn_realtime_transcription_loop(
     app: AppHandle,
     session: Arc<AudioSession>,
-    client: OpenAiClient,
-    model: String,
+    realtime_connection: (String, String),
     kind: CaptureKind,
 ) {
     tauri::async_runtime::spawn(async move {
         let source = kind.source_label().to_string();
+        let (url, api_key) = realtime_connection;
+        let mut request = match url.into_client_request() {
+            Ok(request) => request,
+            Err(e) => {
+                log::warn!("could not build Realtime request: {e}");
+                return;
+            }
+        };
+        let headers = request.headers_mut();
+        let Ok(authorization) = HeaderValue::from_str(&format!("Bearer {api_key}")) else {
+            log::warn!("could not encode Realtime authorization header");
+            return;
+        };
+        headers.insert("Authorization", authorization);
+        headers.insert("OpenAI-Beta", HeaderValue::from_static("realtime=v1"));
+
+        let (socket, _) = match connect_async(request).await {
+            Ok(connection) => connection,
+            Err(e) => {
+                log::warn!("could not connect to OpenAI Realtime: {e}");
+                return;
+            }
+        };
+        let (mut writer, mut reader) = socket.split();
+        let configuration = json!({
+            "type": "session.update",
+            "session": {
+                "modalities": ["text"],
+                "input_audio_format": "pcm16",
+                "input_audio_transcription": { "model": "gpt-4o-mini-transcribe" },
+                "turn_detection": { "type": "server_vad" }
+            }
+        });
+        if let Err(e) = writer.send(Message::Text(configuration.to_string())).await {
+            log::warn!("could not configure OpenAI Realtime: {e}");
+            return;
+        }
+
+        let segment_id = Uuid::new_v4().to_string();
+        let mut partial = String::new();
+        let mut interval = tokio::time::interval(Duration::from_millis(80));
 
         while session.is_running() {
-            match session.take_chunk_wav() {
-                Some(wav) => {
-                    transcribe_and_emit(&app, &client, &model, wav, &source).await;
+            tokio::select! {
+                _ = interval.tick() => {
+                    if let Some(pcm) = session.take_realtime_pcm16() {
+                        let packet = json!({
+                            "type": "input_audio_buffer.append",
+                            "audio": base64::engine::general_purpose::STANDARD.encode(pcm),
+                        });
+                        if let Err(e) = writer.send(Message::Text(packet.to_string())).await {
+                            log::warn!("OpenAI Realtime audio stream disconnected: {e}");
+                            break;
+                        }
+                    }
                 }
-                None => tokio::time::sleep(Duration::from_millis(400)).await,
+                event = reader.next() => {
+                    let Some(event) = event else { break; };
+                    match event {
+                        Ok(Message::Text(text)) => emit_realtime_transcript(&app, &source, &segment_id, &mut partial, &text),
+                        Ok(Message::Close(_)) => break,
+                        Err(e) => {
+                            log::warn!("OpenAI Realtime receive failed: {e}");
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
 
-        // Flush trailing audio after stop.
-        if let Some(wav) = session.take_remaining_wav() {
-            transcribe_and_emit(&app, &client, &model, wav, &source).await;
-        }
+        let _ = writer.send(Message::Close(None)).await;
     });
 }
 
-async fn transcribe_and_emit(
+fn emit_realtime_transcript(
     app: &AppHandle,
-    client: &OpenAiClient,
-    model: &str,
-    wav: Vec<u8>,
     source: &str,
+    segment_id: &str,
+    partial: &mut String,
+    event_text: &str,
 ) {
-    match client.transcribe(model, wav).await {
-        Ok(text) if !text.trim().is_empty() => {
-            let segment = TranscriptSegment {
-                id: Uuid::new_v4().to_string(),
-                text: text.trim().to_string(),
-                source: source.to_string(),
-                created_at: chrono::Utc::now().to_rfc3339(),
-                is_final: true,
-            };
-            if let Err(e) = app.emit("transcript-segment", segment) {
-                log::error!("failed to emit transcript segment: {e}");
-            }
+    let Ok(event) = serde_json::from_str::<Value>(event_text) else {
+        return;
+    };
+    let event_type = event["type"].as_str().unwrap_or_default();
+    let (text, is_final) = match event_type {
+        "conversation.item.input_audio_transcription.delta" => {
+            let delta = event["delta"].as_str().unwrap_or_default();
+            partial.push_str(delta);
+            (partial.clone(), false)
         }
-        Ok(_) => {}
-        Err(e) => log::warn!("transcription failed: {e}"),
+        "conversation.item.input_audio_transcription.completed" => {
+            let completed = event["transcript"].as_str().unwrap_or_default();
+            if !completed.is_empty() {
+                partial.clear();
+                partial.push_str(completed);
+            }
+            (partial.clone(), true)
+        }
+        "error" => {
+            log::warn!("OpenAI Realtime error: {}", event["error"]);
+            return;
+        }
+        _ => return,
+    };
+    if text.trim().is_empty() {
+        return;
+    }
+    let segment = TranscriptSegment {
+        id: if is_final { Uuid::new_v4().to_string() } else { segment_id.to_string() },
+        text,
+        source: source.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        is_final,
+    };
+    if let Err(e) = app.emit("transcript-segment", segment) {
+        log::error!("failed to emit Realtime transcript segment: {e}");
     }
 }

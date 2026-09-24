@@ -242,7 +242,12 @@
 }
 .panel__body--listener {
   position: relative;
-  padding: 8px 14px;
+  height: 44px;
+  min-height: 44px;
+  padding: 8px 88px 8px 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
 }
 .answer-panel__body {
   min-height: 116px;
@@ -256,6 +261,26 @@
 .panel__hint {
   color: var(--text-dim);
   margin: 6px 0;
+}
+.panel__body--listener .panel__hint {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.listener-ticker {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.listener-ticker.is-interim {
+  color: var(--text-dim);
+}
+.listener-ticker--error {
+  color: var(--live);
 }
 
 .chip {

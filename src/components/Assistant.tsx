@@ -73,9 +73,12 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
   }, []);
 
   const onAnswer = useCallback(() => {
-    const context = transcript.fullText || assistant.question;
+    // Realtime transcription emits one completed utterance at a time. Prefer
+    // that latest utterance so Cmd/Ctrl+Enter answers the current question,
+    // not stale speech from earlier in the interview.
+    const context = transcript.latestText || transcript.fullText || assistant.question;
     if (context) void assistant.ask(context, { format: true });
-  }, [transcript.fullText, assistant]);
+  }, [transcript.latestText, transcript.fullText, assistant]);
 
   const onScreenshot = useCallback(async () => {
     try {
@@ -112,10 +115,7 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
       if (!mod) return;
       const key = e.key.toLowerCase();
 
-      if (key === "enter") {
-        e.preventDefault();
-        onAnswer();
-      } else if (e.shiftKey && key === "s") {
+      if (e.shiftKey && key === "s") {
         e.preventDefault();
         void onScreenshot();
       } else if (key === "/") {
@@ -131,7 +131,7 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onAnswer, onScreenshot, onChat, onNew, transcript]);
+  }, [onScreenshot, onChat, onNew, transcript]);
 
   useEffect(() => {
     const unlisten = listen<string>("navigate-tab", (event) => {
@@ -146,11 +146,13 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
   useEffect(() => {
     const unlistenTranscript = listen("clear-transcript", clearTranscript);
     const unlistenChat = listen("clear-chat", clearChat);
+    const unlistenAnswer = listen("answer-from-transcript", onAnswer);
     return () => {
       void unlistenTranscript.then((fn) => fn());
       void unlistenChat.then((fn) => fn());
+      void unlistenAnswer.then((fn) => fn());
     };
-  }, [clearTranscript, clearChat]);
+  }, [clearTranscript, clearChat, onAnswer]);
 
   return (
     <div className="overlay">

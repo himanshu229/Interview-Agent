@@ -28,6 +28,7 @@ pub fn register(app: &AppHandle) {
 
     register_window_snap_shortcuts(app);
     register_clear_shortcuts(app);
+    register_answer_shortcut(app);
 }
 
 /// Grid-snap shortcuts work globally (not just when the window has focus)
@@ -75,6 +76,21 @@ fn register_clear_shortcuts(app: &AppHandle) {
         }) {
             log::warn!("failed to register clear shortcut '{accelerator}': {e}");
         }
+    }
+}
+
+/// Requests an AI answer from the newest live Mic/System transcript even when
+/// another application owns keyboard focus.
+fn register_answer_shortcut(app: &AppHandle) {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    let gs = app.global_shortcut();
+    if let Err(e) = gs.on_shortcut("CommandOrControl+Enter", |app, _, event| {
+        if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+            let _ = app.emit("answer-from-transcript", ());
+        }
+    }) {
+        log::warn!("failed to register answer shortcut 'CommandOrControl+Enter': {e}");
     }
 }
 

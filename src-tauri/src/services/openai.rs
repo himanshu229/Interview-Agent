@@ -51,11 +51,6 @@ struct ApiErrorDetail {
     message: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct TranscriptionResponse {
-    text: String,
-}
-
 /// Stateless client for the OpenAI REST API. Reuses a shared `reqwest::Client`.
 #[derive(Clone)]
 pub struct OpenAiClient {
@@ -71,6 +66,26 @@ impl OpenAiClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key,
         }
+    }
+
+    /// Returns the authenticated WebSocket endpoint used for a persistent
+    /// OpenAI Realtime transcription session.
+    pub fn realtime_connection(&self) -> AppResult<(String, String)> {
+        if self.api_key.is_empty() {
+            return Err(AppError::MissingApiKey);
+        }
+
+        let websocket_base = self
+            .base_url
+            .trim_end_matches("/v1")
+            .replacen("https://", "wss://", 1)
+            .replacen("http://", "ws://", 1);
+        Ok((
+            format!(
+                "{websocket_base}/v1/realtime?model=gpt-4o-mini-realtime-preview"
+            ),
+            self.api_key.clone(),
+        ))
     }
 
     /// Sends a chat completion request and returns the assistant reply text.
@@ -110,44 +125,6 @@ impl OpenAiClient {
             .next()
             .map(|c| c.message.content)
             .ok_or_else(|| AppError::OpenAi("empty response from model".into()))
-    }
-
-    /// Transcribes WAV audio bytes using the Whisper transcription endpoint.
-    pub async fn transcribe(&self, model: &str, wav: Vec<u8>) -> AppResult<String> {
-        if self.api_key.is_empty() {
-            return Err(AppError::MissingApiKey);
-        }
-
-        let part = reqwest::multipart::Part::bytes(wav)
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
-            .map_err(|e| AppError::Audio(e.to_string()))?;
-
-        let form = reqwest::multipart::Form::new()
-            .text("model", model.to_string())
-            .text("response_format", "json")
-            .part("file", part);
-
-        let resp = self
-            .http
-            .post(format!("{}/audio/transcriptions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .multipart(form)
-            .send()
-            .await?;
-
-        let status = resp.status();
-        let text = resp.text().await?;
-
-        if !status.is_success() {
-            let message = serde_json::from_str::<ApiErrorBody>(&text)
-                .map(|b| b.error.message)
-                .unwrap_or_else(|_| text.clone());
-            return Err(AppError::OpenAi(format!("{status}: {message}")));
-        }
-
-        let parsed: TranscriptionResponse = serde_json::from_str(&text)?;
-        Ok(parsed.text)
     }
 
     /// Lightweight validation call used by the "Test" button in Settings.

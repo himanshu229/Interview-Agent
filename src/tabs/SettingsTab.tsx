@@ -50,6 +50,10 @@ export default function SettingsTab() {
             <kbd>Cmd/Ctrl + /</kbd>
           </div>
           <div>
+            <span>Answer latest live question</span>
+            <kbd>Cmd/Ctrl + Enter</kbd>
+          </div>
+          <div>
             <span>Clear transcript</span>
             <kbd>Cmd/Ctrl + Backspace/Delete</kbd>
           </div>
