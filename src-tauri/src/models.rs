@@ -109,7 +109,6 @@ pub struct AppSettings {
     pub whisper_model: String,
     pub base_url: String,
     pub theme: String,
-    pub always_on_top: bool,
     pub launch_at_startup: bool,
     #[serde(default = "default_global_shortcut")]
     pub global_shortcut: String,
@@ -145,7 +144,6 @@ impl Default for AppSettings {
             whisper_model: "whisper-1".to_string(),
             base_url: "https://api.openai.com/v1".to_string(),
             theme: "dark".to_string(),
-            always_on_top: true,
             launch_at_startup: false,
             global_shortcut: default_global_shortcut(),
             ocr_language: "eng".to_string(),

@@ -90,21 +90,6 @@ fn dispatch(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
     }
 }
 
-#[tauri::command]
-pub async fn set_always_on_top(app: AppHandle, enabled: bool) -> AppResult<()> {
-    dispatch(&app, move |app| {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_always_on_top(enabled);
-            // Keep the window pinned across Spaces / full-screen apps while it's on top.
-            let _ = window.set_visible_on_all_workspaces(enabled);
-            if enabled {
-                pin_above_everything(&window);
-            }
-        }
-    });
-    Ok(())
-}
-
 /// Resizes the main window's height to fit its rendered content (width stays
 /// fixed). Logged so the terminal shows exactly what's requested vs. applied.
 #[tauri::command]
@@ -132,22 +117,6 @@ pub async fn set_content_protection(app: AppHandle, enabled: bool) -> AppResult<
         for label in ["main", "overlay"] {
             if let Some(window) = app.get_webview_window(label) {
                 let _ = window.set_content_protected(enabled);
-            }
-        }
-    });
-    Ok(())
-}
-
-/// Shows/hides the main window, mimicking a floating assistant toggle.
-#[tauri::command]
-pub async fn toggle_floating_window(app: AppHandle) -> AppResult<()> {
-    dispatch(&app, |app| {
-        if let Some(window) = app.get_webview_window("main") {
-            if window.is_visible().unwrap_or(false) {
-                let _ = window.hide();
-            } else {
-                let _ = window.show();
-                let _ = window.set_focus();
             }
         }
     });

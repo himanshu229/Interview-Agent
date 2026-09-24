@@ -34,14 +34,9 @@ pub struct AudioSession {
     running: Arc<AtomicBool>,
     buffer: Arc<Mutex<Vec<f32>>>,
     sample_rate: Arc<AtomicU32>,
-    kind: CaptureKind,
 }
 
 impl AudioSession {
-    pub fn kind(&self) -> CaptureKind {
-        self.kind
-    }
-
     /// Signals the capture thread to stop. The stream is dropped when the
     /// thread observes the flag.
     pub fn stop(&self) {
@@ -101,7 +96,6 @@ pub fn start_capture(kind: CaptureKind) -> AppResult<AudioSession> {
         running,
         buffer,
         sample_rate,
-        kind,
     })
 }
 

@@ -71,7 +71,6 @@ export interface AppSettings {
   whisperModel: string;
   baseUrl: string;
   theme: ThemeMode;
-  alwaysOnTop: boolean;
   launchAtStartup: boolean;
   globalShortcut: string;
   ocrLanguage: string;
@@ -87,7 +86,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   whisperModel: "whisper-1",
   baseUrl: "https://api.openai.com/v1",
   theme: "dark",
-  alwaysOnTop: true,
   launchAtStartup: false,
   globalShortcut: "Command+H",
   ocrLanguage: "eng",

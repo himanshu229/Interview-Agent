@@ -145,9 +145,7 @@ pub fn run() {
             commands::settings::set_api_key,
             commands::settings::clear_api_key,
             commands::settings::test_api_key,
-            commands::window::set_always_on_top,
             commands::window::set_content_protection,
-            commands::window::toggle_floating_window,
             commands::window::resize_to_content,
         ])
         .run(tauri::generate_context!())

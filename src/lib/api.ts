@@ -136,15 +136,7 @@ export async function testApiKey(): Promise<boolean> {
 // Window
 // ---------------------------------------------------------------------------
 
-export async function setAlwaysOnTop(enabled: boolean): Promise<void> {
-  return invoke("set_always_on_top", { enabled });
-}
-
 /** Hides/shows the window from screen capture, recording, and screen sharing. */
 export async function setContentProtection(enabled: boolean): Promise<void> {
   return invoke("set_content_protection", { enabled });
-}
-
-export async function toggleFloatingWindow(): Promise<void> {
-  return invoke("toggle_floating_window");
 }

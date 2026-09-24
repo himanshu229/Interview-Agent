@@ -4,9 +4,6 @@ use serde::Serialize;
 /// directly from Tauri commands and surfaced to the frontend.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("configuration error: {0}")]
-    Config(String),
-
     #[error("no OpenAI API key configured. Add one in Settings.")]
     MissingApiKey,
 
