@@ -58,7 +58,7 @@ export default function SettingsTab() {
       <section className="settings-section">
         <h3>Shortcuts</h3>
         <div className="settings-field settings-field--shortcut">
-          <label>Hide / show application ({modifier} + H)</label>
+          <label>Hide / show application ({modifier} + Shift + K)</label>
           <input
             value={shortcutDraft}
             onChange={(e) => setShortcutDraft(e.target.value)}
@@ -68,7 +68,7 @@ export default function SettingsTab() {
                 e.currentTarget.blur();
               }
             }}
-            placeholder={`${modifier}+H`}
+            placeholder={`${modifier}+Shift+K`}
           />
         </div>
       </section>

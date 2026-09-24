@@ -133,11 +133,9 @@ fn default_opacity() -> f64 {
 }
 
 pub fn default_global_shortcut() -> String {
-    if cfg!(target_os = "macos") {
-        "Command+H".to_string()
-    } else {
-        "Control+H".to_string()
-    }
+    // Avoid "Command/Control+H": that's macOS's own system-wide "hide app"
+    // gesture, so it was too easy to accidentally hide the whole window.
+    "CommandOrControl+Shift+K".to_string()
 }
 
 impl Default for AppSettings {

@@ -10,15 +10,20 @@ pub(crate) fn pin_above_everything(window: &tauri::WebviewWindow) {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
 
-    if let Ok(ptr) = window.ns_window() {
-        unsafe {
+    match window.ns_window() {
+        Ok(ptr) => unsafe {
             let ns_window = ptr as *mut AnyObject;
             if let Some(ns_window) = ns_window.as_ref() {
                 // One level below the screen-capture "shield" level: effectively topmost.
                 let level: isize = 2_147_483_630;
                 let _: () = msg_send![ns_window, setLevel: level];
+                let confirmed: isize = msg_send![ns_window, level];
+                log::info!("pin_above_everything: requested level={level}, confirmed={confirmed}");
+            } else {
+                log::warn!("pin_above_everything: ns_window pointer was null");
             }
-        }
+        },
+        Err(e) => log::warn!("pin_above_everything: failed to get ns_window: {e}"),
     }
 }
 
@@ -73,17 +78,30 @@ pub(crate) fn pin_above_everything(window: &tauri::WebviewWindow) {
 )))]
 pub(crate) fn pin_above_everything(_window: &tauri::WebviewWindow) {}
 
+/// Runs `f` on the OS main thread. AppKit/GTK window calls (`pin_above_everything`,
+/// `set_size`, `set_position`, ...) can abort the process if invoked off the
+/// main thread, but Tauri's `async fn` commands run on a background (tokio)
+/// thread. Every command below that touches a `WebviewWindow` is funneled
+/// through here instead of calling window APIs directly.
+fn dispatch(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
+    let app_clone = app.clone();
+    if let Err(e) = app.run_on_main_thread(move || f(&app_clone)) {
+        log::warn!("failed to schedule window task on main thread: {e}");
+    }
+}
 
 #[tauri::command]
 pub async fn set_always_on_top(app: AppHandle, enabled: bool) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.set_always_on_top(enabled)?;
-        // Keep the window pinned across Spaces / full-screen apps while it's on top.
-        window.set_visible_on_all_workspaces(enabled)?;
-        if enabled {
-            pin_above_everything(&window);
+    dispatch(&app, move |app| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_always_on_top(enabled);
+            // Keep the window pinned across Spaces / full-screen apps while it's on top.
+            let _ = window.set_visible_on_all_workspaces(enabled);
+            if enabled {
+                pin_above_everything(&window);
+            }
         }
-    }
+    });
     Ok(())
 }
 
@@ -91,14 +109,16 @@ pub async fn set_always_on_top(app: AppHandle, enabled: bool) -> AppResult<()> {
 /// fixed). Logged so the terminal shows exactly what's requested vs. applied.
 #[tauri::command]
 pub async fn resize_to_content(app: AppHandle, width: f64, height: f64) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        let before = window.outer_size().ok();
-        window.set_size(tauri::LogicalSize::new(width, height))?;
-        let after = window.outer_size().ok();
-        log::info!(
-            "resize_to_content: requested {width}x{height}, size before={before:?} after={after:?}"
-        );
-    }
+    dispatch(&app, move |app| {
+        if let Some(window) = app.get_webview_window("main") {
+            let before = window.outer_size().ok();
+            let _ = window.set_size(tauri::LogicalSize::new(width, height));
+            let after = window.outer_size().ok();
+            log::info!(
+                "resize_to_content: requested {width}x{height}, size before={before:?} after={after:?}"
+            );
+        }
+    });
     Ok(())
 }
 
@@ -108,24 +128,29 @@ pub async fn resize_to_content(app: AppHandle, width: f64, height: f64) -> AppRe
 /// local user.
 #[tauri::command]
 pub async fn set_content_protection(app: AppHandle, enabled: bool) -> AppResult<()> {
-    for label in ["main", "overlay"] {
-        if let Some(window) = app.get_webview_window(label) {
-            window.set_content_protected(enabled)?;
+    dispatch(&app, move |app| {
+        for label in ["main", "overlay"] {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.set_content_protected(enabled);
+            }
         }
-    }
+    });
     Ok(())
 }
 
 /// Shows/hides the main window, mimicking a floating assistant toggle.
 #[tauri::command]
 pub async fn toggle_floating_window(app: AppHandle) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            window.hide()?;
-        } else {
-            window.show()?;
-            window.set_focus()?;
+    dispatch(&app, |app| {
+        if let Some(window) = app.get_webview_window("main") {
+            if window.is_visible().unwrap_or(false) {
+                let _ = window.hide();
+            } else {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
         }
-    }
+    });
     Ok(())
 }
+

@@ -41,9 +41,11 @@ pub fn run() {
             let state = AppState::new(data_dir)
                 .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
 
-            let shortcut = state.settings.read().global_shortcut.clone();
-            let always_on_top = state.settings.read().always_on_top;
-            let content_protection = state.settings.read().content_protection;
+            let settings_snapshot = state.settings.read().clone();
+            // Always-on-top is a permanent, non-configurable behavior of this app
+            // (it's meant to work like a floating monitor), not a user setting.
+            let always_on_top = true;
+            let content_protection = settings_snapshot.content_protection;
 
             app.manage(state);
 
@@ -52,7 +54,7 @@ pub fn run() {
 
             // Global shortcut (desktop only).
             #[cfg(desktop)]
-            shortcuts::register(app.handle(), &shortcut);
+            shortcuts::register(app.handle(), &settings_snapshot.global_shortcut);
 
             // Apply persisted window preferences.
             if let Some(window) = app.get_webview_window("main") {
@@ -84,6 +86,22 @@ pub fn run() {
                 let _ = window.set_focus();
             }
 
+            // Belt-and-suspenders: periodically re-assert the topmost pin, like
+            // macOS's own screenshot-thumbnail overlay, so nothing can ever knock
+            // it behind another app even outside the focus-change event above.
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(700));
+                // Window/GTK APIs must run on the main thread (required on Linux).
+                let handle = app_handle.clone();
+                let handle_for_closure = handle.clone();
+                let _ = handle.run_on_main_thread(move || {
+                    if let Some(window) = handle_for_closure.get_webview_window("main") {
+                        commands::window::pin_above_everything(&window);
+                    }
+                });
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -99,11 +117,8 @@ pub fn run() {
             if let WindowEvent::Focused(false) = event {
                 if window.label() == "main" {
                     let app = window.app_handle();
-                    let always_on_top = app.state::<AppState>().settings.read().always_on_top;
-                    if always_on_top {
-                        if let Some(webview) = app.get_webview_window("main") {
-                            commands::window::pin_above_everything(&webview);
-                        }
+                    if let Some(webview) = app.get_webview_window("main") {
+                        commands::window::pin_above_everything(&webview);
                     }
                 }
             }

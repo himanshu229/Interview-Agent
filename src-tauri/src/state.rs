@@ -71,7 +71,14 @@ fn load_settings(path: &PathBuf) -> AppSettings {
     match std::fs::read_to_string(path) {
         Ok(text) => {
             let mut settings: AppSettings = serde_json::from_str(&text).unwrap_or_default();
-            if settings.global_shortcut == "CommandOrControl+Shift+Space" {
+            // Migrate off older defaults, including "Command/Control+H" which collides
+            // with macOS's system-wide "hide app" shortcut.
+            let legacy_defaults = [
+                "CommandOrControl+Shift+Space",
+                "Command+H",
+                "Control+H",
+            ];
+            if legacy_defaults.contains(&settings.global_shortcut.as_str()) {
                 settings.global_shortcut = crate::models::default_global_shortcut();
             }
             settings
