@@ -86,22 +86,6 @@ pub fn run() {
                 let _ = window.set_focus();
             }
 
-            // Belt-and-suspenders: periodically re-assert the topmost pin, like
-            // macOS's own screenshot-thumbnail overlay, so nothing can ever knock
-            // it behind another app even outside the focus-change event above.
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || loop {
-                std::thread::sleep(std::time::Duration::from_millis(700));
-                // Window/GTK APIs must run on the main thread (required on Linux).
-                let handle = app_handle.clone();
-                let handle_for_closure = handle.clone();
-                let _ = handle.run_on_main_thread(move || {
-                    if let Some(window) = handle_for_closure.get_webview_window("main") {
-                        commands::window::pin_above_everything(&window);
-                    }
-                });
-            });
-
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -110,6 +94,11 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                }
+            }
+            if let WindowEvent::Moved(position) = event {
+                if window.label() == "main" {
+                    commands::window::sync_snap_grid_cell(window, *position);
                 }
             }
             // Re-assert the topmost z-order whenever focus moves to another app,
