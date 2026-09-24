@@ -18,13 +18,15 @@ pub async fn save_settings(
 ) -> AppResult<()> {
     state.update_settings(settings.clone())?;
     #[cfg(desktop)]
-    crate::shortcuts::register(&app, &settings.global_shortcut);
+    crate::shortcuts::register(&app);
     Ok(())
 }
 
 #[tauri::command]
 pub async fn set_api_key(api_key: String, state: State<'_, AppState>) -> AppResult<()> {
-    SecretStore::set_api_key(api_key.trim())?;
+    let api_key = api_key.trim().to_string();
+    SecretStore::set_api_key(&api_key)?;
+    state.cache_api_key(Some(api_key));
     let mut settings = state.settings_snapshot();
     settings.has_api_key = true;
     state.update_settings(settings)
@@ -33,6 +35,7 @@ pub async fn set_api_key(api_key: String, state: State<'_, AppState>) -> AppResu
 #[tauri::command]
 pub async fn clear_api_key(state: State<'_, AppState>) -> AppResult<()> {
     SecretStore::clear_api_key()?;
+    state.cache_api_key(None);
     let mut settings = state.settings_snapshot();
     settings.has_api_key = false;
     state.update_settings(settings)

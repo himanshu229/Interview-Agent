@@ -14,12 +14,12 @@ const MAX_HEIGHT = 600;
  * soon as the element actually mounts, even if that happens after the first
  * render (e.g. behind a loading gate).
  */
-export function useAutoWindowHeight(): (node: HTMLElement | null) => void {
+export function useAutoWindowHeight(enabled: boolean): (node: HTMLElement | null) => void {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const ref = useCallback((el: HTMLElement | null) => setNode(el), []);
 
   useEffect(() => {
-    if (!node) return;
+    if (!enabled || !node) return;
 
     let lastHeight = -1;
 
@@ -38,7 +38,7 @@ export function useAutoWindowHeight(): (node: HTMLElement | null) => void {
     applySize();
 
     return () => observer.disconnect();
-  }, [node]);
+  }, [enabled, node]);
 
   return ref;
 }

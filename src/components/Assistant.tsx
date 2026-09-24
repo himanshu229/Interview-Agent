@@ -64,7 +64,8 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     );
   }, [settings.opacity]);
 
-  // Start listening on both mic and system audio as soon as a session begins.
+  // Start both capture sources as soon as a session begins. System audio may
+  // still report an OS-device error if no loopback source is configured.
   useEffect(() => {
     if (!transcript.micActive) void transcript.toggleMic();
     if (!transcript.systemActive) void transcript.toggleSystem();
@@ -92,6 +93,9 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     transcript.clear();
     assistant.clear();
   }, [transcript, assistant]);
+
+  const clearTranscript = useCallback(() => transcript.clear(), [transcript]);
+  const clearChat = useCallback(() => assistant.clear(), [assistant]);
 
   const onChat = useCallback(() => setComposeOpen((v) => !v), []);
 
@@ -123,9 +127,6 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
       } else if (key === "n") {
         e.preventDefault();
         onNew();
-      } else if (e.shiftKey && (key === "backspace" || key === "delete")) {
-        e.preventDefault();
-        onNew();
       }
     };
     window.addEventListener("keydown", handler);
@@ -142,6 +143,15 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
     };
   }, [onScreenshot]);
 
+  useEffect(() => {
+    const unlistenTranscript = listen("clear-transcript", clearTranscript);
+    const unlistenChat = listen("clear-chat", clearChat);
+    return () => {
+      void unlistenTranscript.then((fn) => fn());
+      void unlistenChat.then((fn) => fn());
+    };
+  }, [clearTranscript, clearChat]);
+
   return (
     <div className="overlay">
       <Toolbar
@@ -150,7 +160,6 @@ export default function Assistant({ session, onEnd }: AssistantProps) {
         onToggleMic={transcript.toggleMic}
         onToggleSystem={transcript.toggleSystem}
         onChat={onChat}
-        onNew={onNew}
         onEnd={endSession}
         elapsed={elapsed}
         menu={

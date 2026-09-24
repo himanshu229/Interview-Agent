@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { SNAP_POSITIONS, snapWindowTo } from "@/lib/windowSnap";
+import { collapseCompactWindow } from "@/lib/api";
 
 export interface ToolbarProps {
   micActive: boolean;
@@ -7,7 +7,6 @@ export interface ToolbarProps {
   onToggleMic: () => void;
   onToggleSystem: () => void;
   onChat: () => void;
-  onNew: () => void;
   onEnd: () => void;
   elapsed: string;
   menu: ReactNode;
@@ -23,13 +22,11 @@ export default function Toolbar({
   onToggleMic,
   onToggleSystem,
   onChat,
-  onNew,
   onEnd,
   elapsed,
   menu,
 }: ToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [positionOpen, setPositionOpen] = useState(false);
 
   return (
     <div className="toolbar">
@@ -39,29 +36,23 @@ export default function Toolbar({
       </span>
 
       <button
-        className={"toolbar__btn toolbar__listen" + (micActive ? " is-active" : "")}
+        className={"toolbar__icon toolbar__listen" + (micActive ? " is-active" : "")}
         onClick={onToggleMic}
-        title="Start / stop microphone (⌘⇧L)"
+        title={micActive ? "Stop microphone" : "Start microphone"}
       >
-        <span className={"dot" + (micActive ? " dot--live" : "")} />
-        Mic
+        🎙
       </button>
 
       <button
-        className={"toolbar__btn toolbar__listen" + (systemActive ? " is-active" : "")}
+        className={"toolbar__icon toolbar__listen" + (systemActive ? " is-active" : "")}
         onClick={onToggleSystem}
-        title="Start / stop system audio"
+        title={systemActive ? "Stop system audio" : "Start system audio"}
       >
-        <span className={"dot" + (systemActive ? " dot--live" : "")} />
-        System
+        🔊
       </button>
 
       <button className="toolbar__btn" onClick={onChat} title="Ask a question">
         Chat <Kbd>⌘/</Kbd>
-      </button>
-
-      <button className="toolbar__icon" onClick={onNew} title="New session (⌘N)">
-        ＋
       </button>
 
       {/* Draggable spacer */}
@@ -71,37 +62,13 @@ export default function Toolbar({
         {elapsed}
       </button>
 
-      <div className="toolbar__menu-wrap">
-        <button
-          className={"toolbar__icon" + (positionOpen ? " is-active" : "")}
-          onClick={() => setPositionOpen((v) => !v)}
-          title="Snap window position"
-        >
-          ⊞
-        </button>
-        {positionOpen && (
-          <>
-            <div className="menu-backdrop" onClick={() => setPositionOpen(false)} />
-            <div className="position-dropdown">
-              <div className="position-grid">
-                {SNAP_POSITIONS.map((pos) => (
-                  <button
-                    key={pos}
-                    className="position-cell"
-                    title={pos.replace("-", " ")}
-                    onClick={() => {
-                      void snapWindowTo(pos);
-                      setPositionOpen(false);
-                    }}
-                  >
-                    <span className={"position-cell__mark position-cell__mark--" + pos} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      <button
+        className="toolbar__icon"
+        onClick={() => void collapseCompactWindow()}
+        title="Collapse to app icon (Cmd/Ctrl+H)"
+      >
+        ⊖
+      </button>
 
       <div className="toolbar__menu-wrap">
         <button

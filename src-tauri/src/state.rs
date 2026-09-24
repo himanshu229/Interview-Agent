@@ -13,6 +13,7 @@ use crate::services::secrets::SecretStore;
 pub struct AppState {
     pub db: Mutex<Database>,
     pub settings: RwLock<AppSettings>,
+    api_key: RwLock<Option<String>>,
     pub http: reqwest::Client,
     pub mic_session: Mutex<Option<Arc<AudioSession>>>,
     pub system_session: Mutex<Option<Arc<AudioSession>>>,
@@ -26,7 +27,10 @@ impl AppState {
         let db = Database::open(&data_dir.join("assistant.db"))?;
         let config_path = data_dir.join("settings.json");
         let mut settings = load_settings(&config_path);
-        settings.has_api_key = SecretStore::has_api_key();
+        // Read the keychain once per app lifetime. Re-reading for every audio
+        // chunk triggers repeated macOS Keychain permission prompts.
+        let api_key = SecretStore::get_api_key().ok().flatten();
+        settings.has_api_key = api_key.is_some();
 
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(120))
@@ -36,6 +40,7 @@ impl AppState {
         Ok(AppState {
             db: Mutex::new(db),
             settings: RwLock::new(settings),
+            api_key: RwLock::new(api_key),
             http,
             mic_session: Mutex::new(None),
             system_session: Mutex::new(None),
@@ -45,12 +50,12 @@ impl AppState {
 
     pub fn settings_snapshot(&self) -> AppSettings {
         let mut s = self.settings.read().clone();
-        s.has_api_key = SecretStore::has_api_key();
+        s.has_api_key = self.api_key.read().is_some();
         s
     }
 
     pub fn update_settings(&self, mut settings: AppSettings) -> AppResult<()> {
-        settings.has_api_key = SecretStore::has_api_key();
+        settings.has_api_key = self.api_key.read().is_some();
         {
             let mut guard = self.settings.write();
             *guard = settings.clone();
@@ -59,11 +64,15 @@ impl AppState {
     }
 
     /// Builds an OpenAI client using the current settings and the API key from
-    /// the OS keychain.
+    /// the in-memory cache populated from the OS keychain at startup.
     pub fn openai_client(&self) -> AppResult<OpenAiClient> {
-        let api_key = SecretStore::get_api_key()?.ok_or(AppError::MissingApiKey)?;
+        let api_key = self.api_key.read().clone().ok_or(AppError::MissingApiKey)?;
         let base_url = self.settings.read().base_url.clone();
         Ok(OpenAiClient::new(self.http.clone(), base_url, api_key))
+    }
+
+    pub fn cache_api_key(&self, api_key: Option<String>) {
+        *self.api_key.write() = api_key;
     }
 }
 
@@ -71,14 +80,13 @@ fn load_settings(path: &PathBuf) -> AppSettings {
     match std::fs::read_to_string(path) {
         Ok(text) => {
             let mut settings: AppSettings = serde_json::from_str(&text).unwrap_or_default();
-            // Migrate off older defaults, including "Command/Control+H" which collides
-            // with macOS's system-wide "hide app" shortcut.
             let legacy_defaults = [
                 "CommandOrControl+Shift+Space",
-                "Command+H",
-                "Control+H",
+                "CommandOrControl+Shift+K",
             ];
-            if legacy_defaults.contains(&settings.global_shortcut.as_str()) {
+            if settings.global_shortcut.trim().is_empty()
+                || legacy_defaults.contains(&settings.global_shortcut.as_str())
+            {
                 settings.global_shortcut = crate::models::default_global_shortcut();
             }
             settings

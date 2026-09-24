@@ -15,14 +15,6 @@ export default function Menu({
   onChangeModel,
 }: MenuProps) {
   const { settings, update } = useSettings();
-  const languages = [
-    ["eng", "English"],
-    ["spa", "Spanish"],
-    ["fra", "French"],
-    ["deu", "German"],
-    ["hin", "Hindi"],
-    ["chi_sim", "Chinese"],
-  ];
 
   return (
     <div className="menu">
@@ -73,22 +65,6 @@ export default function Menu({
         </select>
       </div>
 
-      <div className="menu__section">
-        <label className="menu__row">
-          <span>Language</span>
-        </label>
-        <select
-          className="menu__select"
-          value={settings.ocrLanguage}
-          onChange={(e) => void update({ ocrLanguage: e.target.value })}
-        >
-          {languages.map(([code, label]) => (
-            <option key={code} value={code}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
     </div>
   );
 }

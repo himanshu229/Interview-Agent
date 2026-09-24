@@ -54,7 +54,7 @@ pub fn run() {
 
             // Global shortcut (desktop only).
             #[cfg(desktop)]
-            shortcuts::register(app.handle(), &settings_snapshot.global_shortcut);
+            shortcuts::register(app.handle());
 
             // Apply persisted window preferences.
             if let Some(window) = app.get_webview_window("main") {
@@ -136,6 +136,8 @@ pub fn run() {
             commands::settings::test_api_key,
             commands::window::set_content_protection,
             commands::window::resize_to_content,
+            commands::window::restore_compact_window,
+            commands::window::collapse_compact_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AI Desktop Assistant");

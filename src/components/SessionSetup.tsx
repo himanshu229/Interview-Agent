@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { exit } from "@tauri-apps/plugin-process";
-import { extractPdfText } from "@/lib/api";
+import { collapseCompactWindow, extractPdfText } from "@/lib/api";
 import { MODEL_OPTIONS } from "@/lib/session";
 import { useSettings } from "@/context/SettingsContext";
 import SettingsModal from "@/components/SettingsModal";
@@ -100,6 +100,13 @@ export default function SessionSetup({ onCreate }: SessionSetupProps) {
           <h1 data-tauri-drag-region>New Session</h1>
           <span className="setup__head-spacer" data-tauri-drag-region />
           <div className="setup__head-actions">
+            <button
+              className="toolbar__icon"
+              onClick={() => void collapseCompactWindow()}
+              title="Collapse to app icon (Cmd/Ctrl+H)"
+            >
+              ⊖
+            </button>
             <button
               className="toolbar__icon"
               onClick={() => setSettingsOpen(true)}

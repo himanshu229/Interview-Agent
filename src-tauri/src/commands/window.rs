@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use std::sync::{Mutex, OnceLock};
 
 use crate::error::AppResult;
@@ -23,6 +23,12 @@ impl SnapGridCell {
 }
 
 static SNAP_GRID_CELL: OnceLock<Mutex<Option<SnapGridCell>>> = OnceLock::new();
+static COMPACT_WINDOW: OnceLock<Mutex<Option<tauri::PhysicalSize<u32>>>> = OnceLock::new();
+
+const COMPACT_SIZE: f64 = 40.0;
+const NORMAL_WIDTH: f64 = 540.0;
+const NORMAL_MIN_HEIGHT: f64 = 200.0;
+const NORMAL_MAX_HEIGHT: f64 = 600.0;
 
 /// Raises the window's native level above `NSFloatingWindowLevel` so it stays
 /// visible above every other app's windows, even ones that are themselves
@@ -105,11 +111,100 @@ pub(crate) fn pin_above_everything(_window: &tauri::WebviewWindow) {}
 /// main thread, but Tauri's `async fn` commands run on a background (tokio)
 /// thread. Every command below that touches a `WebviewWindow` is funneled
 /// through here instead of calling window APIs directly.
-fn dispatch(app: &AppHandle, f: impl FnOnce(&AppHandle) + Send + 'static) {
+fn dispatch<R: tauri::Runtime>(app: &AppHandle<R>, f: impl FnOnce(&AppHandle<R>) + Send + 'static) {
     let app_clone = app.clone();
     if let Err(e) = app.run_on_main_thread(move || f(&app_clone)) {
         log::warn!("failed to schedule window task on main thread: {e}");
     }
+}
+
+fn is_compact() -> bool {
+    COMPACT_WINDOW
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .is_some()
+}
+
+fn collapse_to_icon<R: tauri::Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if is_compact() {
+        return;
+    }
+    let Ok(normal_size) = window.outer_size() else {
+        log::warn!("could not read main window size before compacting");
+        return;
+    };
+    let compact = tauri::LogicalSize::new(COMPACT_SIZE, COMPACT_SIZE);
+    let _ = window.set_min_size(Some(compact));
+    let _ = window.set_max_size(Some(compact));
+    if let Err(e) = window.set_size(compact) {
+        log::warn!("could not collapse main window to icon: {e}");
+        return;
+    }
+    *COMPACT_WINDOW
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(normal_size);
+    let _ = app.emit("compact-window", true);
+    log::info!("collapsed main window to on-screen app icon");
+}
+
+fn restore_from_icon<R: tauri::Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let normal_size = COMPACT_WINDOW
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    let Some(normal_size) = normal_size else {
+        return;
+    };
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(NORMAL_WIDTH, NORMAL_MIN_HEIGHT)));
+    let _ = window.set_max_size(Some(tauri::LogicalSize::new(NORMAL_WIDTH, NORMAL_MAX_HEIGHT)));
+    let _ = window.set_size(normal_size);
+    let _ = app.emit("compact-window", false);
+    let _ = window.show();
+    let _ = window.set_focus();
+    log::info!("restored main window from on-screen app icon");
+}
+
+pub(crate) fn toggle_compact_window<R: tauri::Runtime>(app: &AppHandle<R>) {
+    dispatch(app, |app| {
+        if is_compact() {
+            restore_from_icon(app);
+        } else {
+            collapse_to_icon(app);
+        }
+    });
+}
+
+#[tauri::command]
+pub async fn restore_compact_window(app: AppHandle) -> AppResult<()> {
+    dispatch(&app, restore_from_icon);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn collapse_compact_window(app: AppHandle) -> AppResult<()> {
+    dispatch(&app, collapse_to_icon);
+    Ok(())
+}
+
+pub(crate) fn reveal_main_window<R: tauri::Runtime>(app: &AppHandle<R>) {
+    dispatch(app, |app| {
+        if is_compact() {
+            restore_from_icon(app);
+        } else if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    });
 }
 
 /// Moves the main window through a 3x3 grid on its current monitor. This runs
@@ -316,6 +411,9 @@ mod tests {
 #[tauri::command]
 pub async fn resize_to_content(app: AppHandle, width: f64, height: f64) -> AppResult<()> {
     dispatch(&app, move |app| {
+        if is_compact() {
+            return;
+        }
         if let Some(window) = app.get_webview_window("main") {
             let before = window.outer_size().ok();
             let _ = window.set_size(tauri::LogicalSize::new(width, height));

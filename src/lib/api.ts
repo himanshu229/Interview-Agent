@@ -140,3 +140,8 @@ export async function testApiKey(): Promise<boolean> {
 export async function setContentProtection(enabled: boolean): Promise<void> {
   return invoke("set_content_protection", { enabled });
 }
+
+/** Collapses the main window to its on-screen app-icon state. */
+export async function collapseCompactWindow(): Promise<void> {
+  return invoke("collapse_compact_window");
+}

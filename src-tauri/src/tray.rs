@@ -1,6 +1,6 @@
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// Builds the system-tray icon with a context menu and click handlers.
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -61,9 +61,5 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn reveal_main(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
+    crate::commands::window::reveal_main_window(app);
 }

@@ -33,25 +33,27 @@ export default function AnswerPanel({ assistant, composeOpen }: AnswerPanelProps
   };
 
   return (
-    <section className="glass panel">
-      <header className="panel__head">
-        <div className="qbar">
-          <span className="qbar__icon">💬</span>
-          <input
-            ref={inputRef}
-            className="qbar__input"
-            placeholder="Ask a question…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
-        </div>
-        <button className="chip chip--ghost" onClick={assistant.clear}>
-          Clear <span className="kbd">⌘⇧⌫</span>
-        </button>
-      </header>
+    <section className="glass panel answer-panel">
+      {composeOpen && (
+        <header className="panel__head">
+          <div className="qbar">
+            <span className="qbar__icon">💬</span>
+            <input
+              ref={inputRef}
+              className="qbar__input"
+              placeholder="Ask a question…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+            />
+          </div>
+          <button className="chip chip--ghost panel__clear-action" onClick={assistant.clear} title="Clear chat">
+            Clear
+          </button>
+        </header>
+      )}
 
-      <div className="panel__body" ref={bodyRef}>
+      <div className="panel__body answer-panel__body" ref={bodyRef}>
         {!assistant.question && !assistant.loading && (
           <p className="panel__hint">
             Ask a question, press <b>Answer</b> to solve the transcript, or capture

@@ -1,25 +1,8 @@
-import { useEffect, useState } from "react";
-import { platform } from "@tauri-apps/plugin-os";
 import { useSettings } from "@/context/SettingsContext";
 import { setContentProtection } from "@/lib/api";
 
 export default function SettingsTab() {
   const { settings, update } = useSettings();
-  const [platformName] = useState(() => platform());
-  const modifier = platformName === "macos" ? "Command" : "Control";
-
-  // Local draft so partial keystrokes don't register invalid/empty shortcuts.
-  const [shortcutDraft, setShortcutDraft] = useState(settings.globalShortcut);
-  useEffect(() => setShortcutDraft(settings.globalShortcut), [settings.globalShortcut]);
-
-  const commitShortcut = () => {
-    const value = shortcutDraft.trim();
-    if (!value) {
-      setShortcutDraft(settings.globalShortcut);
-      return;
-    }
-    if (value !== settings.globalShortcut) void update({ globalShortcut: value });
-  };
 
   return (
     <div className="settings-tab">
@@ -57,19 +40,39 @@ export default function SettingsTab() {
       </section>
       <section className="settings-section">
         <h3>Shortcuts</h3>
-        <div className="settings-field settings-field--shortcut">
-          <label>Hide / show application ({modifier} + Shift + K)</label>
-          <input
-            value={shortcutDraft}
-            onChange={(e) => setShortcutDraft(e.target.value)}
-            onBlur={commitShortcut}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder={`${modifier}+Shift+K`}
-          />
+        <div className="settings-shortcut-list" aria-label="Window movement shortcuts">
+          <div>
+            <span>Collapse / restore application</span>
+            <kbd>Cmd/Ctrl + H</kbd>
+          </div>
+          <div>
+            <span>Show / hide chat question</span>
+            <kbd>Cmd/Ctrl + /</kbd>
+          </div>
+          <div>
+            <span>Clear transcript</span>
+            <kbd>Cmd/Ctrl + Backspace/Delete</kbd>
+          </div>
+          <div>
+            <span>Clear chat</span>
+            <kbd>Cmd/Ctrl + Shift + Backspace/Delete</kbd>
+          </div>
+          <div>
+            <span>Move application left</span>
+            <kbd>Cmd/Ctrl + Left</kbd>
+          </div>
+          <div>
+            <span>Move application right</span>
+            <kbd>Cmd/Ctrl + Right</kbd>
+          </div>
+          <div>
+            <span>Move application up</span>
+            <kbd>Cmd/Ctrl + Up</kbd>
+          </div>
+          <div>
+            <span>Move application down</span>
+            <kbd>Cmd/Ctrl + Down</kbd>
+          </div>
         </div>
       </section>
     </div>

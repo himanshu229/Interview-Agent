@@ -34,7 +34,4 @@ impl SecretStore {
         }
     }
 
-    pub fn has_api_key() -> bool {
-        matches!(Self::get_api_key(), Ok(Some(_)))
-    }
 }
